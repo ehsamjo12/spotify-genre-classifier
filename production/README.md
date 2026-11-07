@@ -2,6 +2,8 @@
 
 An app that guesses the genre of a song (classical, country, heavy-metal, hip-hop, jazz or techno) from its Spotify audio features. The model only uses how a song sounds: popularity is left out on purpose.
 
+![The app](docs/app.gif)
+
 - `train_model.ipynb` trains the XGBoost model, tunes one threshold per genre, tests feature importance and saves everything to `models/`.
 - `backend/app.py` is a Flask-RESTful backend that loads the files in `models/` and offers a REST API.
 - `frontend/` is a React app that uses the API.
