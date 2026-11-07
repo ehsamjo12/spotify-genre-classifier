@@ -9,6 +9,7 @@ from flask_restful import Api, Resource
 from flask_restful.reqparse import RequestParser
 from sklearn.metrics import accuracy_score, classification_report, confusion_matrix
 
+
 # The models folder is next to the backend folder: production/models
 MODELS_FOLDER = os.path.join(os.path.dirname(__file__), '..', 'models')
 
@@ -22,6 +23,7 @@ feature_names = model_package['feature_names']
 
 with open(os.path.join(MODELS_FOLDER, 'thresholds.json')) as f:
     tuned_thresholds = json.load(f)
+    
 
 # The thresholds the app uses right now. A copy, so the tuned ones never change.
 current_thresholds = dict(tuned_thresholds)
@@ -98,7 +100,8 @@ class SearchSongs(Resource):
 
         results = []
         for song_id, song in matches.iterrows():
-            results.append({'song_id': int(song_id), 'track_name': song['track_name'],
+            # track_id is Spotify's own id, so the frontend can get the album cover from Spotify
+            results.append({'song_id': int(song_id), 'track_id': song['track_id'], 'track_name': song['track_name'],
                             'artists': song['artists'], 'genre': song['genre'], 'set': song['set']})
         return {'songs': results}
 
@@ -115,8 +118,8 @@ class PredictSong(Resource):
 
         result = make_prediction(songs.loc[[song_id], feature_names])
         song = songs.loc[song_id]
-        result['song'] = {'song_id': song_id, 'track_name': song['track_name'], 'artists': song['artists'],
-                          'true_genre': song['genre'], 'set': song['set']}
+        result['song'] = {'song_id': song_id, 'track_id': song['track_id'], 'track_name': song['track_name'],
+                          'artists': song['artists'], 'true_genre': song['genre'], 'set': song['set']}
         if song['set'] == 'train':
             result['warning'] = 'This song was used to train the model, so the prediction is not a fair test.'
         return result

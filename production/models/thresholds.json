@@ -1,8 +1,8 @@
 {
-  "classical": 0.45,
-  "country": 0.4,
-  "heavy-metal": 0.45,
+  "classical": 0.35,
+  "country": 0.3,
+  "heavy-metal": 0.55,
   "hip-hop": 0.45,
   "jazz": 0.35,
-  "techno": 0.5
+  "techno": 0.4
 }
