@@ -26,18 +26,24 @@ with open(os.path.join(MODELS_FOLDER, 'thresholds.json')) as f:
     
 
 # The thresholds the app uses right now. A copy, so the tuned ones never change.
-current_thresholds = dict(tuned_thresholds)
+current_thresholds = dict(tuned_thresholds) # Make a copy, so the tuned ones never change.
 
-test_results = pd.read_csv(os.path.join(MODELS_FOLDER, 'test_probabilities.csv'), index_col='song_id')
-threshold_curves = pd.read_csv(os.path.join(MODELS_FOLDER, 'threshold_curves.csv'))
-feature_importance = pd.read_csv(os.path.join(MODELS_FOLDER, 'feature_importance.csv'))
-songs = pd.read_csv(os.path.join(MODELS_FOLDER, 'songs.csv'), index_col='song_id')
+test_results = pd.read_csv(os.path.join(MODELS_FOLDER, 'test_probabilities.csv'), index_col='song_id') # The probabilities of the test songs, used to calculate the results on the /results page.
 
-app = Flask('Spotify genre backend')
+threshold_curves = pd.read_csv(os.path.join(MODELS_FOLDER, 'threshold_curves.csv')) # The F1 score for every genre at every threshold, used to draw the curves on the /threshold-curves page.
+
+feature_importance = pd.read_csv(os.path.join(MODELS_FOLDER, 'feature_importance.csv')) # The importance of every feature, used to draw the chart on the /feature-importance page.
+
+songs = pd.read_csv(os.path.join(MODELS_FOLDER, 'songs.csv'), index_col='song_id') # The songs that the app can predict, with their features and true genre. The index is a unique song_id that the frontend uses to ask for predictions.
+
+app = Flask('Spotify genre backend') # The name is used in the logs, and also to find the static folder if we ever add one.
 CORS(app)        # lets the React app, which runs on another port, call this backend
-api = Api(app)
+api = Api(app) # The Api object is used to add the endpoints, like /predict/song
 
-def pick_genre(probabilities):
+
+
+
+def pick_genre(probabilities): 
     """Of the genres that reach their threshold, the one with the highest probability.
     If no genre reaches its threshold, the answer is 'not sure'."""
     passed = [genre for genre in genres if probabilities[genre] >= current_thresholds[genre]]
