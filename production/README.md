@@ -7,7 +7,7 @@ An app that guesses the genre of a song (classical, country, heavy-metal, hip-ho
 - `train_model.ipynb` trains the XGBoost model, tunes one threshold per genre, tests feature importance and saves everything to `models/`.
 - `backend/app.py` is a Flask-RESTful backend that loads the files in `models/` and offers a REST API.
 - `frontend/` is a React app that uses the API.
-- `report/` has the report about ethics and usability.
+- `report/` has the report about ethics and usability, as [PDF](report/ethics_report.pdf) and [Markdown](report/ethics_report.md).
 
 ## How to run it
 
