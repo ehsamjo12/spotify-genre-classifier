@@ -1,6 +1,6 @@
 % Ethics report: Spotify genre classifier (ML in Production Environment)
 % Ready for Overleaf: it compiles with pdfLaTeX (Overleaf's default), XeLaTeX and LuaLaTeX.
-\documentclass[12pt,a4paper]{article}
+\documentclass[11pt,a4paper]{article}
 
 \usepackage{iftex}
 \ifPDFTeX
@@ -10,9 +10,9 @@
   \usepackage{fontspec}
 \fi
 \usepackage[english]{babel}
-\usepackage[a4paper,margin=2.5cm]{geometry}
+\usepackage[a4paper,margin=2.2cm]{geometry}
 \usepackage{setspace}
-\onehalfspacing
+\setstretch{1.1}
 \usepackage{microtype}
 \usepackage{parskip}
 \usepackage{csquotes}
@@ -20,12 +20,17 @@
 \usepackage{booktabs}
 \usepackage{float}
 \usepackage[font=small,skip=8pt]{caption}
+\usepackage{xurl}                    % long links can break over lines
 \usepackage[hidelinks,pdftitle={Ethics report: Spotify genre classifier}]{hyperref}
 \pdfstringdefDisableCommands{\def\enquote#1{"#1"}}
+\urlstyle{same}                      % links in the normal font
 
+\usepackage{titlesec}
+\titleformat*{\section}{\large\bfseries}
+\titlespacing*{\section}{0pt}{2.2ex plus 1ex minus .2ex}{0.6ex plus .2ex}
 \setcounter{secnumdepth}{0}          % headings without numbers
 \setlist[itemize]{itemsep=4pt,parsep=0pt,topsep=6pt}
-\renewcommand{\arraystretch}{1.3}    % a bit more room in the tables
+\renewcommand{\arraystretch}{1.15}    % a bit more room in the tables
 \setlength{\emergencystretch}{1.5em} % no lines that stick out into the margin
 
 \begin{document}
@@ -35,197 +40,73 @@
   \medskip
   ML in Production Environment\par
 \end{center}
-\bigskip
-
-\section{Summary}
-
-This report looks at the ethics of an app that guesses the genre of a song from how it sounds. The model gets 81.7\% of the test songs right, and when it is not sure enough, the app says \enquote{not sure} instead of guessing. A closer look shows that the model is weak and that its mistakes are not spread fairly: most of them land on music that does not fit the six genres, like Indian music and songs that mix genres. The app can give a useful hint, but it should not decide what genre a song \enquote{really} is, and it should never be used to make decisions about artists.
+\medskip
 
 \section{Introduction}
 
-The app has a Flask-RESTful backend with an XGBoost model, and a React frontend. It can predict the genre of a song, show the test results, show which features the model uses, and change the threshold for each genre. The main topic of this report is threshold tuning: how sure the model should be before it gives an answer, and who is affected by that choice. The report also covers the data, the model, feature importance, usability and trustworthiness.
+The app guesses the genre of a song from how it sounds. Behind it there is an XGBoost model, a Flask backend with a REST API and a React frontend, and with it you can make predictions, look at the test results and the feature importance, and change the thresholds. The lecture makes the point that the labels, the metrics and the thresholds in a machine learning project are never completely neutral choices. This report goes through them using the four steps from the lecture, map, measure, manage and govern, and most of the focus is on the thresholds.
 
-\section{Data}
+\section{Who is affected?}
 
-The model is trained on a Kaggle dataset of Spotify songs. The full dataset has 114 genres, but the project only uses six of them: classical, country, heavy-metal, hip-hop, jazz and techno. After cleaning, 4,650 songs are left. Of these, 3,720 are used for training and 930 for testing.
+Music recommendation is at the low end of the lecture's stake spectrum, where the main worries are privacy and filter bubbles, and a genre classifier that only gives listeners a hint fits in the same place. Under the EU AI Act it would most likely count as minimal risk. Things change if a streaming service used the same model to decide which playlists a song ends up on, because then a wrong label would cost the artist listeners and money. The people affected are listeners and artists, and the worst thing that could realistically happen is that the same groups of artists get the wrong label over and over again. That is why the model works as a hint, but not as a judge, since genre is partly a question of culture and taste.
 
-The genre labels are not facts. Each song has just one label, which shows how it was grouped when the data was collected. Many songs fit more than one genre, but songs that were listed under more than one of the six genres were removed during cleaning. This made the data cleaner, but it also means the model has never seen a song that mixes genres, even though such songs are very common.
+\section{Where things can go wrong}
 
-The genres are also mostly Western. The full dataset has genres like indian, k-pop and samba, but this model only knows six genres from American and European music. Any other music is pushed into one of the six, or gets \enquote{not sure}. Even the \enquote{classical} label mixes very different traditions: Mozart is next to Indian classical singers like Bhimsen Joshi. The section \enquote{Who gets the mistakes?} shows what this does to the results.
+The lecture lists five places where harm can get into a machine learning pipeline, and all five show up in this project.
 
-The genres are not the same size either. There are 991 heavy-metal songs but only 500 jazz songs, about half as many, and jazz is also the genre the model does worst on. Songs by the same artist can also be in both the training set and the test set, which makes the test results look better than they really are.
+The first is the data. The model only knows 6 of the 114 genres in the Kaggle dataset, all of them Western, which leaves 4,650 songs. Just like in the Gender Shades study, where face classifiers worked worse for women with darker skin, one overall number hides how different groups are doing. The app gets 80\% of the test songs right, and almost all of the Western classical songs (121 of 123), but only 23 of the 38 Indian songs labeled classical.
 
-\section{The model}
+The second is the labels. Every song has only one label, and songs that were listed under more than one genre were removed. A model can fit its labels well and still miss what it is meant to do, like the health algorithm that looked at cost instead of real need. \enquote{The Champion} by Carrie Underwood and Ludacris is labeled country, but the model is almost 97\% sure it is hip hop, and to be fair, Ludacris does rap on it.
 
-The model is XGBoost, which combines many small decision trees. It uses 14 features. Thirteen of them describe the sound, like acousticness, danceability and tempo. The last one, \enquote{explicit}, only says if the lyrics are explicit.
+The third is proxies. Popularity was left out on purpose, because it says something about fame and not about sound, even though the accuracy dropped from 88\% to 82\%. A model can still pick up the same kind of thing through other features, and \enquote{explicit} is one of them: a quarter of the hip hop songs are explicit, but none of the classical songs are. It is also the feature the model uses the least, so it could simply be removed.
 
-Popularity was left out on purpose. Popularity measures how much a song is played, not how it sounds. If the model used it, it would partly learn which genres are popular, and a new artist with few plays could get a different answer just because nobody knows them yet. Without popularity, the accuracy went down from 88.1\% to 81.7\%. That is worth it, since the tool should judge the sound and not the fame.
+The fourth is feedback loops. If the labels were used to build playlists, a song shown to the wrong listeners would get fewer plays, look less popular and then be shown even less.
 
-The \enquote{explicit} feature is a problem. It is about the lyrics, not the sound, and it mostly points to one genre: 25.2\% of the hip-hop songs are explicit, but none of the classical songs are. This can teach the model that explicit lyrics mean hip-hop, which is a stereotype. It is also the least important of the 14 features in the permutation test, so removing it would cost almost nothing.
+The fifth is validation and monitoring. Most of the test songs are by artists the model has already seen in training. For new artists it is right only about 70\% of the time, compared to 81\% for the others, so the results look better than they would in real use. The sepsis model from the lecture, which did worse in hospitals than reported, is an example of the same problem. On top of that, genres change over time, and since November 2024 Spotify no longer gives these audio features to new apps, so the model would be hard to keep up to date.
 
-The XGBoost settings come from a RandomizedSearchCV search in the first part of the project, when popularity was still included. They may not be the best settings for the model without popularity, so the next step would be to tune the model again and test it on artists it has never seen.
+\section{Choosing the thresholds}
 
-\section{Threshold tuning: when to say \enquote{not sure}}
+The usual threshold of 0.5 assumes that the classes are balanced and that every mistake costs the same, and neither is true here, since there are 991 heavy metal songs but only 500 jazz songs. That is why every genre gets its own threshold, which is the lowest probability it needs before the app picks it, and if no genre gets there, the app says \enquote{not sure}. To find the thresholds, values from 0.05 to 0.95 were tested with cross validation on the training songs, and the one with the best F1 score was kept for each genre. Country ended up at 0.30, classical and jazz at 0.35, techno at 0.40, hip hop at 0.45 and heavy metal at 0.55. Like the lecture recommends, the thresholds are stored separately from the model, so they can be changed without training it again.
 
-For every song, the model gives each genre a probability, which is how likely it thinks that genre is. A normal model just picks the genre with the highest probability, even if it is only 30\%. This app works differently. Every genre has its own threshold, which is the lowest probability the genre needs before the app picks it. If no genre reaches its threshold, the app says \enquote{not sure}. If more than one does, the one with the highest probability wins.
+A good example is \enquote{justified} by Kacey Musgraves. It is labeled country, but the model gives it about 30\% hip hop and 17\% country. Since no genre reaches its threshold, the app says \enquote{not sure} instead of giving a wrong answer, and that happened for 37 of the 930 test songs. When the app does give an answer, it is right 83\% of the time, compared to 82\% without thresholds, but if you count \enquote{not sure} as wrong, the accuracy goes down to 80\%. So the thresholds make the model more careful, not smarter.
 
-The thresholds were chosen by testing 19 values for each genre, from 0.05 to 0.95, and keeping the one with the best F1 score. F1 is a score from 0 to 1. It is only high when the model finds most of the songs in a genre and is also right most of the times it names that genre. The testing was done with 5-fold cross-validation on the training songs, so every song was predicted by a model that had not seen it. The test songs were not used at all, which keeps the final test fair. Table 1 shows the thresholds and how each genre does on the test songs.
+Picking a threshold is really a choice about who pays for the mistakes. A low threshold finds more songs but also gives more wrong labels, and a high threshold does the opposite. Because country has a low threshold, the app calls more songs country, and more of those answers are wrong. Heavy metal has a high threshold, so the app is right more often when it says heavy metal, but it misses more of the real heavy metal songs. F1 treats both kinds of mistakes as equally bad, so if one of them mattered more, a score like F beta, or tuning based on what each mistake costs, would fit better. \enquote{Not sure} is not spread evenly either, since it hits about 7\% of the hip hop songs but less than 1\% of the classical ones. Thresholds can also make the results look better than they are. With every threshold at 0.70, the app is right 92\% of the times it answers, but it says \enquote{not sure} for 245 of the 930 songs. That is why the app counts \enquote{not sure} as a wrong answer and always shows how many songs got it.
 
-\begin{table}[H]
-  \centering
-  \small
-  \caption{The tuned thresholds and the results on the 930 test songs. Precision is how often the app is right when it names the genre. Recall is how many of the genre's songs it finds.}
-  \begin{tabular}{lrrrrrr}
-    \toprule
-    Genre & Threshold & Test songs & Precision & Recall & F1 & \enquote{Not sure} \\
-    \midrule
-    classical & 0.35 & 161 & 0.900 & 0.894 & 0.897 & 1 \\
-    country & 0.30 & 127 & 0.687 & 0.724 & 0.705 & 4 \\
-    heavy-metal & 0.55 & 198 & 0.920 & 0.869 & 0.894 & 8 \\
-    hip-hop & 0.45 & 149 & 0.826 & 0.732 & 0.776 & 10 \\
-    jazz & 0.35 & 100 & 0.678 & 0.610 & 0.642 & 6 \\
-    techno & 0.40 & 195 & 0.853 & 0.831 & 0.842 & 8 \\
-    \bottomrule
-  \end{tabular}
-\end{table}
+\section{Is it fair, and can it be explained?}
 
-A good example is \enquote{justified} by Kacey Musgraves, which is labeled country. The model gives hip-hop the highest probability, 29.7\%, but hip-hop needs 45\%. Country only gets 16.9\%, and no other genre reaches its threshold either. So instead of wrongly saying hip-hop, the app says \enquote{not sure}. This happened for 37 of the 930 test songs.
+The lecture shows that thresholds for each group can be tuned to meet a fairness criterion, but tuning for F1 does not meet any of them. The app finds 89\% of the classical songs but only 61\% of the jazz songs, so there is no equal opportunity, and how often it is right when it names a genre also varies a lot between the genres. Inside classical, the gap between Western and Indian songs is even bigger. Since the fairness criteria cannot all be met at the same time, one of them has to be chosen, and for artists equal opportunity seems the fairest, because a song that gets missed hurts the artist behind it.
 
-So what did the thresholds change? When the app gives an answer, it is right more often: 740 of its 893 answers are right (82.9\%), compared to 81.7\% without thresholds. But if \enquote{not sure} counts as a wrong answer, the accuracy goes down from 81.7\% to 79.6\%, and the macro F1 (the average F1 of the six genres) goes from 0.797 to 0.793. So the thresholds do not make the model smarter. They make it more careful.
+Threshold tuning also assumes that the probabilities can be trusted. The model was never calibrated, for example with Platt scaling, but its confidence still matches how often it is right quite well. When it is at least 90\% sure, it is right 97\% of the time, and when it is less than 50\% sure, only 44\% of the time.
 
-This raises a few ethical questions.
+XGBoost is a black box, so it needs extra tools to be explained. Permutation importance and the total gain from XGBoost both say that acousticness, danceability and instrumentalness matter the most, although features that go together, like energy and loudness, can end up sharing the importance. This kind of overall explanation helps the people who build and check the model, but an artist would want to know why their song got the genre it did. SHAP or LIME could show that, but they explain an approximation of the model and not the model itself. The lecture also points out that GDPR and the AI Act ask for explanations, which is one more reason not to use the app for decisions about people.
 
-\textbf{\enquote{Not sure} does not hit all genres the same.} Saying \enquote{not sure} is more honest than a wrong guess, but it is not spread evenly. 10 of the 149 hip-hop songs (6.7\%) and 6 of the 100 jazz songs (6.0\%) got \enquote{not sure}, but only 1 of the 161 classical songs (0.6\%). It happens when the probabilities are spread over several genres, which is typical for songs that mix styles, like \enquote{justified}.
+\section{Can the app be trusted?}
 
-\textbf{Different genres have different rules.} A song needs 55\% to be called heavy-metal, but only 30\% to be called country, and this changes who gets the mistakes. Because the country threshold is low, the app now calls 134 songs country instead of 126, and more of them are wrong: the precision for country drops from 0.722 to 0.687. Heavy-metal is the opposite. With its high threshold, the app is right more often when it says heavy-metal (the precision goes from 0.889 to 0.920), but it finds fewer of the real heavy-metal songs (the recall goes from 0.934 to 0.869). Every threshold is a choice between two mistakes: giving a song the wrong genre, or missing a song that belongs to the genre. F1 treats both mistakes as equally bad. In a real product, a person should make that choice on purpose.
+Several things make the app easier to trust. It shows its own test results, puts the real label next to each prediction, warns when a song was used in training, says \enquote{not sure} instead of guessing and rejects wrong input. The results can also be repeated, since the random state is fixed, the model files are saved and the code is in git. Other things work against trust. There is no login, so if one person changes a threshold, it changes for everyone. Song lookups also go to outside services like Spotify and YouTube, which matters for privacy under GDPR, even though the model itself uses no personal data. The polished design can also make the model seem more reliable than it is. There is no plan for monitoring the model yet, and if it were ever used for decisions about artists, or the gaps between groups grew, that would be a reason to stop. All in all, it can be trusted as a hint for clear songs when it is very sure, but not for mixed music, music from outside the West, new artists or answers below 70\%.
 
-\textbf{The numbers can be made to look better than they are.} If every threshold is set to 0.70, the app is right 629 of the 685 times it answers (91.8\%). That sounds great until you see that it says \enquote{not sure} for 245 of the 930 songs. This is why the app counts \enquote{not sure} as wrong in its accuracy, and always shows how many songs got \enquote{not sure}.
+\section{How easy is it to use?}
 
-\textbf{One change affects everyone.} The sliders make the model easier to understand, because users see the results change right away. But the thresholds are stored in the backend, so when one user changes them, the answers change for every user. There is no login to stop this, and the changes are lost when the backend restarts.
-
-\section{Feature importance}
-
-Two methods were used to see which features the model depends on. Permutation importance shuffles one feature at a time in the test songs and measures how much worse the model gets. The bigger the drop, the more the model needs that feature. XGBoost's total gain measures how much each feature helped the trees split the songs during training. Both methods agree on the top three: acousticness (0.203 in the permutation test and 0.243 in total gain), danceability (0.116 and 0.137) and instrumentalness (0.089 and 0.114).
-
-This shows what the model \enquote{listens} to, but it tells us about the model, not about music. A song is not jazz because of its acousticness score. Features that go together can also share the importance between them. Energy and loudness have a correlation of 0.83, so each of them can look less important than it really is. Both methods also only describe the model as a whole. The app cannot explain why one specific song got its genre, which is what a user would need to judge a single answer.
-
-\section{Why this is a weak model}
-
-At first the test results look good, but a closer look shows that the model is weak in several ways.
-
-It is wrong quite often. Without thresholds it gets 170 of the 930 test songs wrong (18.3\%). With thresholds, 153 answers are wrong and 37 are \enquote{not sure}.
-
-It does worse on artists it has never seen. 796 of the 930 test songs (85.6\%) are by artists who also have songs in the training set, and the app gets 646 of them right (81.2\%). For the 134 songs by new artists, it only gets 94 right (70.1\%). So for new music, the main results are too optimistic.
-
-It can be very sure and still be wrong. Of the 486 test songs where the model was at least 90\% sure, 14 were wrong. One of them is \enquote{The Champion} by Carrie Underwood and Ludacris. It is labeled country, but the model is 96.9\% sure it is hip-hop. Ludacris raps on the song, so it is really both. Many of the confident mistakes are like this: country songs with rap in them, or songs with a doubtful label, like reggaeton labeled as hip-hop.
-
-It knows very little about each song. The model never hears the music. It only gets 14 numbers per song, and nothing about the lyrics, the instruments or where the music comes from, even though a genre is also about culture and history. These numbers are Spotify's own estimates, made by another algorithm, so the model is built on guesses. In November 2024, Spotify also stopped giving these numbers to new apps, so the model cannot easily be used on new songs.
-
-The task was made easy. The six genres were picked in the first part of the project because they sound very different and share few songs. Real music has many genres that are close to each other (the full dataset has 114, like rock, alt-rock and indie), and that would be a much harder task.
-
-It is also uneven between genres. The F1 score is 0.897 for classical and 0.894 for heavy-metal, but only 0.705 for country and 0.642 for jazz (see Table 1).
-
-\section{Who gets the mistakes?}
-
-The mistakes are not spread evenly. Most of them land on music that does not fit into the six boxes. Table 2 shows how often the app gives the right genre for some groups of test songs.
-
-\begin{table}[H]
-  \centering
-  \small
-  \caption{How often the app gives the right genre for different groups of test songs (\enquote{not sure} counts as wrong). The classical songs were sorted into Western and Indian by the artist's name.}
-  \begin{tabular}{lrr}
-    \toprule
-    Group of test songs & Songs & Right genre \\
-    \midrule
-    Western songs labeled classical & 123 & 121 (98.4\%) \\
-    Indian songs labeled classical & 38 & 23 (60.5\%) \\
-    Songs by artists who are also in the training set & 796 & 646 (81.2\%) \\
-    Songs by new artists & 134 & 94 (70.1\%) \\
-    \midrule
-    All test songs & 930 & 740 (79.6\%) \\
-    \bottomrule
-  \end{tabular}
-\end{table}
-
-The biggest gap is for Indian music. Of the 161 classical test songs, 123 are Western and 38 are Indian (some of these are really film or devotional songs). The app gets 121 of the Western songs right, but only 23 of the Indian ones, so 15 of the 17 classical songs it misses are Indian. This is probably because the model learned what \enquote{classical} means mostly from Western music, which is mostly instrumental, while a lot of the Indian music is sung. Even the project's first notebook describes classical as \enquote{mostly orchestral and instrumental music}, which is a Western way of seeing it.
-
-Songs that mix genres are also hit. Country songs with rap, like \enquote{The Champion}, get called hip-hop with high confidence, and mixed songs are also the ones that most often get \enquote{not sure}. New artists get the right genre less often than artists the model already knows (70.1\% against 81.2\%), even though new and small artists are the ones who need a fair label the most. And jazz and country have the lowest F1 scores, so artists in those genres get more wrong labels.
-
-If a music service used a model like this to put songs on playlists, these groups would be the ones most often shown to the wrong listeners. The problem could also grow by itself: a song that is shown to the wrong listeners gets fewer plays, looks less popular, and then gets shown even less.
-
-\section{Usability and accessibility}
-
-The app is one page with three views: Predict, Thresholds and Features. Users can search for a song or describe one themselves with sliders. For songs from the dataset, the prediction is shown next to the real label, so it is easy to see when the model is wrong. Probability bars with a line for each threshold show how sure the model is, and a \enquote{not sure} answer comes with a short explanation, for example \enquote{Not sure: hip-hop is most likely (30\%), but below its threshold.} Extra details are hidden until the user opens them.
-
-Album covers, music videos and a DJ mode make the app fun to use, but they can also take attention away from the model's limits. The moving background stops for people who have turned off animations on their computer, but the light grey text on the dark glass design can be hard to read for people with poor eyesight. The app also only knows six genres, can only judge songs from the dataset or songs described with the sliders, and needs two servers to start. So it works as a demo, not as a product for people who are not technical.
-
-\section{Trustworthiness: when to trust it, and when not}
-
-The app does several things to earn trust. It shows the test results for the current thresholds (79.6\% accuracy and a macro F1 of 0.793 with the tuned thresholds). It shows the real label next to each prediction, warns when a song was used in training (because then the result is not a fair test), and says \enquote{not sure} instead of guessing. The backend also checks the input: missing or wrong values give an error, and thresholds outside 0 to 1 are ignored. Still, none of this fixes doubtful labels or the missing genres.
-
-Some things work against trust. There is no login, so anyone who can reach the backend can change the thresholds for everyone. Album covers, song previews and videos come from Spotify, Apple, YouTube and Wikidata. The app has no control over these services. A video found by search can be the wrong one, and the services can see which songs a user looks up. The polished design, with album covers, videos and glass effects, also makes the model look more professional than it is. People already tend to trust computers too much (this is called automation bias), and a good-looking app makes that worse.
-
-In general, an AI model can be trusted more when:
-
-\begin{itemize}
-  \item mistakes are cheap and easy to fix,
-  \item the input is similar to what the model was trained on,
-  \item the model says how sure it is, and that has been checked,
-  \item a person can check the answer, and
-  \item the model has been tested fairly on new cases.
-\end{itemize}
-
-It should not be trusted when the stakes are high, when the input is very different from the training data, or when the question has no single right answer, like what genre a mixed song \enquote{really} is.
-
-For this model, the good news is that its confidence means something. Table 3 shows that when the model is at least 90\% sure, its top genre is right 97.1\% of the time. When it is less than 50\% sure, it is right only 44.3\% of the time.
-
-\begin{table}[H]
-  \centering
-  \small
-  \caption{How often the model's top genre is right, depending on how sure the model is (930 test songs, without thresholds).}
-  \begin{tabular}{lrr}
-    \toprule
-    How sure the model is & Test songs & Top genre right \\
-    \midrule
-    Less than 50\% & 97 & 43 (44.3\%) \\
-    50\% to under 70\% & 148 & 88 (59.5\%) \\
-    70\% to under 90\% & 199 & 157 (78.9\%) \\
-    90\% or more & 486 & 472 (97.1\%) \\
-    \bottomrule
-  \end{tabular}
-\end{table}
-
-This means the model can be trusted for learning how sound features relate to genres, and as a first guess for clear, typical songs of the six genres when it is very sure. It should not be trusted for songs that mix genres, for music outside the six genres or from non-Western traditions, for songs where it is less than 70\% sure, or for new artists without someone checking.
-
-Most important, it should never be used to make decisions about people, like which playlists artists get on, how much they are paid, or how they are ranked and promoted. A model cannot be held responsible for its mistakes, so a person always has to make these decisions and take responsibility for them.
-
-\section{The good and the bad}
-
-The good sides:
-
-\begin{itemize}
-  \item Popularity is left out, so fame does not decide the genre.
-  \item The app says \enquote{not sure} instead of guessing, and counts \enquote{not sure} as wrong in its accuracy, so the numbers are not made to look better.
-  \item The thresholds were chosen without using the test songs, so the test is fair.
-  \item The app is open about itself. It shows the test results, the real label, the thresholds and the features the model uses, and it warns when a song was used in training.
-  \item The model's confidence means something. When it is at least 90\% sure, it is right 97.1\% of the time.
-  \item It uses no personal data about listeners and has no user accounts.
-\end{itemize}
-
-The bad sides:
-
-\begin{itemize}
-  \item The labels are opinions, mixed songs were removed, and the genres are Western. Only 23 of the 38 Indian songs labeled classical get the right genre, against 121 of the 123 Western ones.
-  \item The model is weak. It gets 18.3\% of the test songs wrong, and only 70.1\% right for new artists.
-  \item It can be very sure and still be wrong.
-  \item The \enquote{explicit} feature links hip-hop to explicit lyrics.
-  \item One user can change the thresholds for everyone, there is no login, and the changes are lost when the backend restarts.
-  \item Outside services can see which songs users look up.
-  \item The polished design can make the model seem more trustworthy than it is.
-\end{itemize}
+The app has three views: Predict, Thresholds and Features. You can search for a song or describe one with sliders, and you see the prediction next to the real label, bars that show how sure the model is with a line for each threshold, and a short explanation when the answer is \enquote{not sure}. The album covers, videos and DJ mode make it fun to use, but they can also take attention away from the model's limits, and the light grey text can be hard to read. It also needs two servers, Python 3.12 or newer and Node.js 20 or newer to run, so it is more of a demo than a finished product.
 
 \section{Conclusion}
 
-The model works best as a helpful hint for clear examples of the six genres, when it is very sure. It should not have the final word on mixed, culturally specific or unusual music, and it should never be used to make decisions about artists. Threshold tuning made the app more careful and more honest, but it also showed that every threshold moves the mistakes onto someone. A better version would need more and fairer data (including mixed and non-Western music), testing on new artists, no \enquote{explicit} feature, explanations for single songs, and a login so one user cannot change the settings for everyone.
+The stakes are low and the app is open about its results, but the model is weak, and the overall accuracy hides that most of the mistakes land on Indian music, songs that mix genres and new artists. The thresholds make it more careful, but every threshold also decides who pays for the mistakes. A better version would need fairer data, testing on new artists, a clear fairness criterion like equal opportunity, explanations for single songs and a login with proper monitoring.
+
+\section{Sources}
+
+{\footnotesize
+\begin{itemize}[itemsep=1pt,topsep=2pt]
+  \item Lecture slides: \enquote{Production Use, MLOps, Ethics \& Interpretability}, ITF31519, {\O}stfold University College.
+  \item Spotify Tracks Dataset (Kaggle): \url{https://www.kaggle.com/datasets/maharshipandya/-spotify-tracks-dataset}
+  \item NIST AI Risk Management Framework: \url{https://doi.org/10.6028/NIST.AI.100-1}
+  \item The EU AI Act (European Commission): \url{https://digital-strategy.ec.europa.eu/en/policies/regulatory-framework-ai}
+  \item EU data protection and GDPR (European Commission): \url{https://commission.europa.eu/law/law-topic/data-protection/data-protection-eu_en}
+  \item Gender Shades (Buolamwini and Gebru, 2018): \url{https://proceedings.mlr.press/v81/buolamwini18a.html}
+  \item Racial bias in a health algorithm (Obermeyer et al., 2019): \url{https://doi.org/10.1126/science.aax2342}
+  \item The Epic sepsis model (Wong et al., 2021): \url{https://doi.org/10.1001/jamainternmed.2021.2626}
+  \item Why fairness criteria cannot all hold at once (Kleinberg et al., 2017): \url{https://arxiv.org/abs/1609.05807}
+  \item Spotify Web API changes (November 2024): \url{https://developer.spotify.com/blog/2024-11-27-changes-to-the-web-api}
+  \item Probability calibration (sklearn user guide): \url{https://scikit-learn.org/stable/modules/calibration.html}
+\end{itemize}}
 
 \end{document}
