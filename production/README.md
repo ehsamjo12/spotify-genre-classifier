@@ -7,13 +7,13 @@ An app that guesses the genre of a song (classical, country, heavy-metal, hip-ho
 - `train_model.ipynb` trains the XGBoost model, tunes one threshold per genre, tests feature importance and saves everything to `models/`.
 - `backend/app.py` is a Flask-RESTful backend that loads the files in `models/` and offers a REST API.
 - `frontend/` is a React app that uses the API.
-- `report/` has the report about ethics and usability, as [PDF](report/ethics_report.pdf), [LaTeX PDF](report/ethics_report_latex.pdf), [LaTeX code](report/ethics_report.tex) (for Overleaf) and [Markdown](report/ethics_report.md).
+- `report/` has the report about ethics and usability: [ethics_report.pdf](report/ethics_report.pdf), made from the LaTeX file [ethics_report.tex](report/ethics_report.tex) (works in Overleaf).
 
 ## How to run it
 
 The commands are run from the project folder (the folder with `dataset/` and `production/`).
 
-1. Install the Python packages (only the first time):
+1. Install the Python packages (only the first time). This needs Python 3.12 or newer (tested with Python 3.14):
 
    ```bash
    python3 -m venv .venv
@@ -28,7 +28,7 @@ The commands are run from the project folder (the folder with `dataset/` and `pr
    .venv/bin/python production/backend/app.py
    ```
 
-4. In a second terminal, start the frontend, which runs on http://localhost:5173. It needs Node.js.
+4. In a second terminal, start the frontend, which runs on http://localhost:5173. It needs Node.js 20 or newer (tested with Node.js 25).
 
    ```bash
    cd production/frontend
